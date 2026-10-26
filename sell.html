@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Start Listing — Bouesti Marketplace</title>
+<meta name="description" content="List your produce or livestock on Bouesti Marketplace: how it works, what it costs, and how to apply.">
+<script>
+(function(){
+  try{
+    var saved = localStorage.getItem('bm_theme');
+    var theme = (saved === 'light' || saved === 'dark') ? saved
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch(e){ document.documentElement.setAttribute('data-theme', 'dark'); }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"></noscript>
+<link rel="stylesheet" href="info.css">
+<link rel="icon" href="images/bouesti-logo.jpg" type="image/jpeg">
+</head>
+<body>
+<header class="site">
+  <div class="nav wrap">
+    <a href="index.html" class="brand">
+      <span class="mark"><img src="images/bouesti-logo.jpg" alt="BOUESTI logo"></span>
+      <span class="name">Bouesti<small>Marketplace</small></span>
+    </a>
+    <nav class="links" style="margin-left:auto;">
+      <a href="index.html#produce">Produce</a>
+      <a href="index.html#livestock">Livestock</a>
+      <a href="buyer-protection.html">Buyer protection</a>
+      <a href="delivery-areas.html">Delivery</a>
+      <a href="sell.html">Sell</a>
+    </nav>
+    <div class="nav-actions">
+      <button type="button" class="theme-btn" id="themeBtn" aria-label="Toggle dark or light mode">
+        <svg class="icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round"/></svg>
+        <svg class="icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" stroke-linejoin="round"/></svg>
+      </button>
+      <a class="auth-btn" href="index.html" style="text-decoration:none;">← Shop</a>
+    </div>
+  </div>
+</header>
+<main class="section"><div class="wrap doc">
+
+<span class="sh-label">Are you a farmer?</span>
+<h1>Start listing today</h1>
+<p class="lead">List your produce or livestock for free and reach buyers across Ekiti and the neighbouring states. This page explains the fees and how listing works, then lets you apply.</p>
+
+<h2>What it costs</h2>
+<div class="pillars">
+  <div class="callout"><b>₦0 to list</b><p>No sign-up fee, no monthly fee and no listing fee.</p></div>
+  <div class="callout"><b>You keep 100%</b><p>You keep 100% of the price you set for your goods.</p></div>
+  <div class="callout"><b>Buyer pays the fee</b><p>A 5% service fee is added at checkout and paid by the buyer, never by the farmer. Delivery is charged to the buyer too.</p></div>
+</div>
+
+<h2>How you get listed</h2>
+<ol>
+  <li><b>Apply.</b> Fill in the form below, or message us on <a href="https://wa.me/2347086087995" target="_blank" rel="noopener">WhatsApp</a>. Tell us what you sell and where you are.</li>
+  <li><b>We check.</b> Every seller is checked before listing. We look at your produce or animals, and livestock needs an up-to-date vet health certificate.</li>
+  <li><b>We list.</b> We set up your listing with clear pictures, the units or weights buyers can choose, your price and your stock.</li>
+  <li><b>Orders arrive.</b> We confirm each order with the buyer, arrange delivery with GPS tracking, and handle buyer questions and claims.</li>
+  <li><b>You get paid.</b> We agree the payment schedule with you when you are verified, and you can see your sales with us at any time.</li>
+</ol>
+
+<h2>What to have ready</h2>
+<ul>
+  <li>What you sell, how much you have, and your price per unit or per kg.</li>
+  <li>Your location (town and LGA).</li>
+  <li>For livestock: breed, age, weight range and a vet health certificate.</li>
+  <li>A phone number we can reach you on.</li>
+</ul>
+
+<h2>Apply now</h2>
+<form class="doc-form callout" id="listForm">
+  <div class="field"><label for="lf-name">Your name</label><input id="lf-name" required></div>
+  <div class="field"><label for="lf-phone">Phone / WhatsApp number</label><input id="lf-phone" type="tel" required placeholder="080…"></div>
+  <div class="field"><label for="lf-email">Email (optional)</label><input id="lf-email" type="email"></div>
+  <div class="field"><label for="lf-what">What do you want to sell?</label><input id="lf-what" required placeholder="e.g. yam, pepper, 40 broilers"></div>
+  <div class="field"><label for="lf-loc">Town / LGA / State</label><input id="lf-loc" placeholder="e.g. Ikere, Ekiti"></div>
+  <div class="field"><label for="lf-msg">Anything else we should know?</label><textarea id="lf-msg" rows="3"></textarea></div>
+  <button class="btn btn-primary" type="submit" id="lf-btn">Send my listing request</button>
+  <div class="form-msg" id="lf-out"></div>
+</form>
+<p>Prefer to chat? <a href="https://wa.me/2347086087995?text=Hi+Bouesti+Marketplace,+I+want+to+list+my+produce" target="_blank" rel="noopener">Message us on WhatsApp</a>.</p>
+
+</div></main>
+<footer><div class="wrap" style="padding:26px 0;font-size:13px;color:var(--text-faint);">
+  © 2026 Bouesti Marketplace · <a href="index.html" style="color:var(--mint);">Home</a> ·
+  <a href="https://wa.me/2347086087995" target="_blank" rel="noopener" style="color:var(--mint);">WhatsApp</a> ·
+  <a href="mailto:successjomiloju@gmail.com" style="color:var(--mint);">successjomiloju@gmail.com</a>
+</div></footer>
+<script>
+document.querySelectorAll('[data-img]').forEach(function(el){
+  var k = el.getAttribute('data-img');
+  if(window.IMG && window.IMG[k]) el.src = window.IMG[k];
+});
+document.getElementById('themeBtn').addEventListener('click', function(){
+  var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('bm_theme', next); } catch(e) {}
+});
+
+document.getElementById('listForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  var out = document.getElementById('lf-out');
+  var btn = document.getElementById('lf-btn');
+  var data = {
+    name: document.getElementById('lf-name').value, phone: document.getElementById('lf-phone').value,
+    email: document.getElementById('lf-email').value, whatSells: document.getElementById('lf-what').value,
+    location: document.getElementById('lf-loc').value, message: document.getElementById('lf-msg').value
+  };
+  btn.disabled = true;
+  fetch('/api/listing-requests', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) })
+    .then(function(res){ return res.json().catch(function(){ return {}; }).then(function(body){ return { ok: res.ok, status: res.status, body: body }; }); })
+    .then(function(r){
+      if(r.ok){ out.style.color = 'var(--mint)'; out.textContent = 'Thank you! We have your request and will contact you soon.'; document.getElementById('listForm').reset(); }
+      else if(r.status === 404 || r.status === 405){ throw new Error('offline'); }
+      else { out.style.color = '#ff4d6d'; out.textContent = r.body.error || 'Something went wrong. Please try again.'; }
+    })
+    .catch(function(){
+      // No server reachable: open WhatsApp with the details filled in.
+      var text = 'Hi Bouesti Marketplace, I want to list: ' + data.whatSells + '. Name: ' + data.name + ', phone: ' + data.phone + ', location: ' + data.location;
+      window.open('https://wa.me/2347086087995?text=' + encodeURIComponent(text), '_blank');
+      out.style.color = 'var(--mint)'; out.textContent = 'Opening WhatsApp so you can send your request.';
+    })
+    .then(function(){ btn.disabled = false; });
+});
+
+</script>
+<script src="care.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Track your order — Bouesti Marketplace</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+  body{margin:0;background:#07191e;color:#e8f8f5;font-family:system-ui,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:16px}
+  h1{font-size:22px;margin:4px 0 12px}
+  a{color:#02f5a1}
+  .card{background:#0d2830;border:1px solid rgba(2,245,161,.14);border-radius:14px;padding:14px;margin-bottom:12px}
+  label{display:block;font-size:12px;opacity:.7;margin:10px 0 4px}
+  input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #234a56;background:#122f38;color:inherit;font:inherit;box-sizing:border-box}
+  button{padding:10px 14px;border:0;border-radius:8px;background:#02f5a1;color:#07191e;font-weight:700;cursor:pointer}
+  #map{height:340px;border-radius:12px;background:#122f38}
+  .hidden{display:none}
+  .muted{opacity:.65;font-size:13px}
+  .err{color:#ff4d6d;font-size:13px;margin-top:8px}
+  .note{background:rgba(255,201,71,.12);border:1px solid rgba(255,201,71,.35);color:#ffe29a;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+  .tl{list-style:none;margin:6px 0 0;padding:0}
+  .tl li{position:relative;padding:0 0 16px 34px;font-size:14px;opacity:.55}
+  .tl li:before{content:'';position:absolute;left:9px;top:20px;bottom:-2px;width:2px;background:#234a56}
+  .tl li:last-child:before{display:none}
+  .tl li i{position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#234a56;border:2px solid #234a56;box-sizing:border-box}
+  .tl li.done{opacity:1}.tl li.done i{background:#02f5a1;border-color:#02f5a1}.tl li.done:before{background:#02f5a1}
+  .tl li.now{opacity:1;font-weight:700}.tl li.now i{background:#07191e;border-color:#02f5a1;box-shadow:0 0 0 4px rgba(2,245,161,.2)}
+  .tl small{display:block;font-weight:400;opacity:.65;font-size:12px}
+  .cancelled{background:rgba(255,77,109,.12);border:1px solid rgba(255,77,109,.4);color:#ff9fb0;border-radius:10px;padding:10px 12px;margin-top:8px}
+  .items{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}.items td{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.07)}.items td:last-child{text-align:right}
+</style>
+<link rel="icon" href="images/bouesti-logo.jpg" type="image/jpeg">
+</head>
+<body>
+<div class="wrap">
+  <a href="index.html">&larr; Back to shopping</a>
+  <h1>Track your order</h1>
+  <div class="note hidden" id="demoNote"><b>Demo mode.</b> No Bouesti server is running, so this page shows orders placed in <b>this browser</b>. Their status updates when the admin changes it in the dashboard on this same browser. Live GPS on a map needs the server (<code>node server.js</code>).</div>
+
+  <div id="loginCard" class="card hidden">
+    <b>Log in to see your orders</b>
+    <label>Email or phone number</label><input id="email" type="text" autocomplete="username" placeholder="you@example.com or 0803 000 0000">
+    <label>Password</label><input id="password" type="password" autocomplete="current-password">
+    <p><button id="loginBtn" type="button">Log in</button> <a href="login.html" style="margin-left:10px;font-size:13px">Create an account</a></p>
+    <div class="err" id="loginErr"></div>
+  </div>
+
+  <div id="appCard" class="hidden">
+    <div class="card">
+      <label id="listLabel">Your orders</label>
+      <select id="orderSelect"></select>
+      <p class="muted" id="info">Loading&hellip;</p>
+      <ul class="tl" id="timeline"></ul>
+      <div class="cancelled hidden" id="cancelledBox">This order was cancelled. If you did not ask for this, tell the Bouesti assistant (chat button) and log a complaint.</div>
+      <div id="details"></div>
+      <p><a id="rcptLink" href="receipt.html" target="_blank" rel="noopener">&#128424; Print receipt</a></p>
+    </div>
+    <div class="card" id="mapCard">
+      <div id="map"></div>
+      <p class="muted" id="mapNote"></p>
+    </div>
+
+    <div class="card hidden" id="riderCard">
+      <b>Delivery rider / staff: share live location for this order</b>
+      <p class="muted">Phones only allow GPS on https:// pages or localhost. On plain http over Wi-Fi, type the coordinates instead.</p>
+      <p><button id="shareBtn" type="button">Start sharing my GPS</button> <button id="stopBtn" type="button" class="hidden">Stop</button></p>
+      <label>Or enter manually (latitude, longitude)</label>
+      <div style="display:flex;gap:6px"><input id="lat" placeholder="7.6210"><input id="lng" placeholder="5.2210"><button id="sendBtn" type="button">Send</button></div>
+      <div class="muted" id="riderNote"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function () {
+  var TOKEN_KEY = 'bm_token';
+  var mode = null;               // 'server' or 'demo'
+  var me = null, orders = [], map, marker, trail, watchId = null, lastSent = 0, timer = null;
+  var STEPS = ['Order placed', 'Confirmed by our team', 'Packed and dispatched', 'On the way to you', 'Delivered'];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function naira(n) { return '\u20a6' + Number(n || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 }); }
+  function token() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
+  function lget(k, def) { try { var v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? def : v; } catch (e) { return def; } }
+  function when(iso) { try { return new Date(iso).toLocaleString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
+
+  // ---------- talking to the server (marks "offline" when there is none behind this page) ----------
+  function api(method, url, body) {
+    var headers = { 'Content-Type': 'application/json' };
+    if (token()) headers.Authorization = 'Bearer ' + token();
+    return fetch(url, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined }).then(function (res) {
+      return res.json().then(function (d) { return { res: res, data: d, json: true }; }, function () { return { res: res, data: {}, json: false }; }).then(function (x) {
+        if (!x.json || ((x.res.status === 404 || x.res.status === 405) && !x.data.error)) { if (!x.res.ok) { var o = new Error('offline'); o.offline = true; throw o; } }
+        if (!x.res.ok) { var err = new Error(x.data.error || 'Request failed'); err.status = x.res.status; throw err; }
+        return x.data;
+      });
+    }, function () { var o = new Error('offline'); o.offline = true; throw o; });
+  }
+  function detectServer() {
+    var ctrl = window.AbortController ? new AbortController() : null, to = setTimeout(function () { if (ctrl) ctrl.abort(); }, 1800);
+    return fetch('/api/health', ctrl ? { signal: ctrl.signal } : undefined).then(function (r) { clearTimeout(to); return r.ok ? r.json().then(function (j) { return !!(j && j.ok); }, function () { return false; }) : false; }, function () { clearTimeout(to); return false; });
+  }
+
+  function showLogin() { $('loginCard').classList.remove('hidden'); $('appCard').classList.add('hidden'); }
+
+  // ---------- timeline + details (shared by both modes) ----------
+  function renderTimeline(status) {
+    var cancelled = status === 'cancelled';
+    $('cancelledBox').classList.toggle('hidden', !cancelled);
+    var reached = status === 'delivered' ? 5 : status === 'processing' ? 3 : 1;
+    var html = '';
+    STEPS.forEach(function (label, i) {
+      var cls = cancelled ? '' : (i < reached ? 'done' : (i === reached ? 'now' : ''));
+      var sub = '';
+      if (!cancelled && i === reached && status !== 'delivered') sub = status === 'pending' ? 'Waiting for our confirmation call' : (i === 3 ? 'Your goods are on the road' : '');
+      html += '<li class="' + cls + '"><i></i>' + esc(label) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</li>';
+    });
+    $('timeline').innerHTML = html;
+  }
+  function renderDetails(o) {
+    var h = '';
+    if (o.items && o.items.length) {
+      h += '<table class="items">' + o.items.map(function (it) {
+        return '<tr><td>' + esc(it.name) + (it.mode ? ' (' + esc(it.mode) + ')' : '') + (it.measure ? ', ' + esc(it.measure) : (it.weightKg ? ' ' + esc(it.weightKg) + 'kg' : '')) + ' &times; ' + esc(it.qty) + '</td><td>' + naira(it.lineTotal) + '</td></tr>';
+      }).join('') + '</table>';
+    }
+    if (o.total != null) h += '<p class="muted">Total: <b>' + naira(o.total) + '</b>' + (o.deliveryFee != null ? ' (incl. delivery ' + naira(o.deliveryFee) + ')' : '') + '</p>';
+    $('details').innerHTML = h;
+  }
+
+  // ---------- SERVER mode ----------
+  function startServer() {
+    return api('GET', '/api/auth/me').then(function (data) {
+      me = data.user;
+      var staff = me.role !== 'customer';
+      $('loginCard').classList.add('hidden'); $('appCard').classList.remove('hidden');
+      $('riderCard').classList.toggle('hidden', !staff);
+      $('listLabel').textContent = staff ? 'All orders' : 'Your orders';
+      return api('GET', staff ? '/api/admin/orders?limit=100' : '/api/orders/mine');
+    }).then(function (data) {
+      orders = data.items;
+      fillSelect(orders.map(function (o) { return { ref: o.ref, label: o.ref + ' \u00b7 ' + o.lga + ' \u00b7 ' + o.status }; }));
+      refresh();
+    });
+  }
+  function refreshServer() {
+    var order = selectedOrder();
+    if (!order) { $('info').textContent = 'You have no orders yet.'; renderTimeline('none'); return; }
+    api('GET', '/api/orders/' + encodeURIComponent(order.ref) + '/tracking').then(function (data) {
+      var o = data.order;
+      $('rcptLink').href = 'receipt.html?ref=' + encodeURIComponent(o.ref);
+      $('info').textContent = 'Status: ' + o.status + ' \u00b7 Payment: ' + o.paymentStatus + ' \u00b7 Delivering to ' + o.address + ', ' + o.lga + (o.state && o.state !== 'Ekiti' ? ', ' + o.state : '');
+      renderTimeline(o.status); renderDetails(o);
+      draw(data.points || []);
+    }).catch(function (err) { $('info').textContent = err.message; });
+  }
+
+  // ---------- DEMO (offline) mode ----------
+  function demoSession() { return lget('bm_session', null); }
+  function demoOrders(wanted) {
+    var s = demoSession(); if (!s) return null;
+    var email = String(s.email || '').toLowerCase(), pk = String(s.phone || '').replace(/\D/g, '').slice(-10);
+    var rec = lget('bm_receipts', {}), adm = (lget('bm_admin_offline_db_v1', {}).orders) || [], byRef = {};
+    Object.keys(rec).forEach(function (ref) {
+      var r = rec[ref];
+      var mine = (r.customerEmail && r.customerEmail.toLowerCase() === email) || (pk && String(r.customerPhone || '').replace(/\D/g, '').slice(-10) === pk) || ref === wanted;
+      if (mine) byRef[ref] = { ref: ref, lga: r.lga, state: r.state, status: r.status || 'pending', payment: r.paymentStatus, address: r.address, createdAt: r.createdAt, total: r.total, deliveryFee: r.deliveryFee, items: r.items, deliveryDate: r.deliveryDate };
+    });
+    adm.forEach(function (o) {
+      if (!o.ref) return;
+      if ((o.customerEmail || '').toLowerCase() === email || byRef[o.ref]) {
+        var m = byRef[o.ref] || (byRef[o.ref] = { ref: o.ref, lga: o.lga, createdAt: o.createdAt, total: o.total, address: o.address });
+        m.status = o.status;   // the admin's status wins
+      }
+    });
+    return Object.keys(byRef).map(function (k) { return byRef[k]; }).sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+  }
+  function startDemo() {
+    $('demoNote').classList.remove('hidden');
+    $('mapCard').classList.add('hidden'); $('riderCard').classList.add('hidden');
+    var wanted = new URLSearchParams(location.search).get('ref');
+    var list = demoOrders(wanted);
+    if (list === null) { showLogin(); return; }
+    me = demoSession();
+    $('loginCard').classList.add('hidden'); $('appCard').classList.remove('hidden');
+    $('listLabel').textContent = 'Your orders (this browser)';
+    orders = list;
+    var keep = $('orderSelect').value;
+    fillSelect(list.map(function (o) { return { ref: o.ref, label: o.ref + ' \u00b7 ' + (o.lga || '') + ' \u00b7 ' + o.status }; }), keep);
+    refresh();
+  }
+  function refreshDemo() {
+    var wanted = new URLSearchParams(location.search).get('ref');
+    orders = demoOrders(wanted) || [];
+    var order = selectedOrder();
+    if (!order) {
+      $('info').innerHTML = 'No orders found for this account in this browser.' + (wanted ? ' We could not find <b>' + esc(wanted) + '</b> here: orders placed in demo mode are saved in the browser where they were placed.' : ' Place an order from the shop and it will appear here.');
+      renderTimeline('none'); $('details').innerHTML = ''; return;
+    }
+    $('rcptLink').href = 'receipt.html?ref=' + encodeURIComponent(order.ref);
+    $('info').textContent = 'Status: ' + order.status + (order.payment ? ' \u00b7 Payment: ' + order.payment : '') + ' \u00b7 Delivering to ' + (order.address || '') + (order.lga ? ', ' + order.lga : '') + (order.state && order.state !== 'Ekiti' ? ', ' + order.state : '') + (order.deliveryDate ? ' \u00b7 Planned: ' + order.deliveryDate : '') + ' \u00b7 Placed ' + when(order.createdAt);
+    renderTimeline(order.status); renderDetails(order);
+  }
+
+  // ---------- common ----------
+  function fillSelect(rows, keep) {
+    var wanted = keep || new URLSearchParams(location.search).get('ref');
+    $('orderSelect').innerHTML = rows.map(function (r) { return '<option value="' + esc(r.ref) + '"' + (r.ref === wanted ? ' selected' : '') + '>' + esc(r.label) + '</option>'; }).join('') || '<option value="">No orders yet</option>';
+  }
+  function selectedOrder() { var ref = $('orderSelect').value; return orders.filter(function (o) { return o.ref === ref; })[0]; }
+  function refresh() { if (mode === 'server') refreshServer(); else refreshDemo(); }
+
+  function draw(points) {
+    if (!window.L) { $('mapNote').textContent = points.length ? 'Last position: ' + points[points.length - 1].lat + ', ' + points[points.length - 1].lng : 'Map library could not load (check your internet).'; return; }
+    if (!map) {
+      map = L.map('map').setView([7.62, 5.22], 9);   // Ekiti State
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '\u00a9 OpenStreetMap' }).addTo(map);
+    }
+    if (marker) { map.removeLayer(marker); marker = null; }
+    if (trail) { map.removeLayer(trail); trail = null; }
+    if (!points.length) { $('mapNote').textContent = 'Waiting for the delivery rider to start sharing location. This page updates by itself.'; return; }
+    var latlngs = points.map(function (p) { return [p.lat, p.lng]; });
+    trail = L.polyline(latlngs, { color: '#02f5a1' }).addTo(map);
+    marker = L.marker(latlngs[latlngs.length - 1]).addTo(map);
+    map.setView(latlngs[latlngs.length - 1], 14);
+    $('mapNote').textContent = 'Last update: ' + points[points.length - 1].createdAt + ' (UTC)';
+  }
+
+  // ---------- login ----------
+  $('loginBtn').onclick = function () {
+    var ident = $('email').value.trim(), pass = $('password').value;
+    $('loginErr').textContent = '';
+    if (!ident || !pass) { $('loginErr').textContent = 'Enter your email or phone number and your password.'; return; }
+    if (mode === 'demo') return demoLogin(ident, pass);
+    api('POST', '/api/auth/login', { email: ident, password: pass })
+      .then(function (data) { localStorage.setItem(TOKEN_KEY, data.token); try { localStorage.setItem('bm_session', JSON.stringify({ name: data.user.name, email: data.user.email, phone: data.user.phone, role: data.user.role })); } catch (e) { /* ignore */ } return startServer(); })
+      .catch(function (err) {
+        if (err.offline) { mode = 'demo'; demoLogin(ident, pass); return; }
+        $('loginErr').textContent = err.message;
+      });
+  };
+  $('password').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('loginBtn').click(); });
+  function demoLogin(ident, pass) {
+    var users = lget('bm_users', []), low = ident.toLowerCase(), pk = ident.replace(/\D/g, '').slice(-10);
+    var u = users.filter(function (x) { return (String(x.email || '').toLowerCase() === low || (pk.length >= 7 && String(x.phone || '').replace(/\D/g, '').slice(-10) === pk)) && x.password === pass; })[0];
+    if (!u) { $('loginErr').textContent = users.length ? 'Incorrect email/phone or password. In demo mode, use an account created on this browser.' : 'No accounts were found in this browser. Create one first (Create an account), then come back.'; return; }
+    try { localStorage.setItem('bm_session', JSON.stringify({ name: u.name, email: u.email, phone: u.phone })); } catch (e) { /* ignore */ }
+    startDemo();
+  }
+
+  $('orderSelect').onchange = refresh;
+  timer = setInterval(function () { if (me) refresh(); }, mode === 'server' ? 8000 : 4000);
+
+  // ---------- rider / staff: send GPS (server mode only) ----------
+  function send(lat, lng) {
+    var order = selectedOrder();
+    if (!order) return;
+    api('POST', '/api/admin/orders/' + order.id + '/location', { lat: lat, lng: lng })
+      .then(function () { $('riderNote').textContent = 'Sent ' + lat.toFixed(5) + ', ' + lng.toFixed(5); refresh(); })
+      .catch(function (err) { $('riderNote').textContent = err.message; });
+  }
+  $('shareBtn').onclick = function () {
+    if (!navigator.geolocation) { $('riderNote').textContent = 'This browser has no GPS support.'; return; }
+    watchId = navigator.geolocation.watchPosition(function (pos) {
+      if (Date.now() - lastSent < 10000) return;
+      lastSent = Date.now();
+      send(pos.coords.latitude, pos.coords.longitude);
+    }, function (err) { $('riderNote').textContent = 'GPS error: ' + err.message; }, { enableHighAccuracy: true });
+    $('shareBtn').classList.add('hidden'); $('stopBtn').classList.remove('hidden');
+  };
+  $('stopBtn').onclick = function () { navigator.geolocation.clearWatch(watchId); $('stopBtn').classList.add('hidden'); $('shareBtn').classList.remove('hidden'); };
+  $('sendBtn').onclick = function () {
+    var lat = parseFloat($('lat').value), lng = parseFloat($('lng').value);
+    if (isNaN(lat) || isNaN(lng)) { $('riderNote').textContent = 'Enter both numbers.'; return; }
+    send(lat, lng);
+  };
+
+  // ---------- go ----------
+  detectServer().then(function (up) {
+    mode = up ? 'server' : 'demo';
+    if (mode === 'demo') { startDemo(); return; }
+    if (token()) startServer().catch(function (e) { if (e.offline) { mode = 'demo'; startDemo(); } else showLogin(); });
+    else showLogin();
+  });
+})();
+</script>
+<script src="care.js" defer></script>
+</body>
+</html>

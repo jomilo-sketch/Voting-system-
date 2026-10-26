@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Receipt — Bouesti Marketplace</title>
+<style>
+  /* The receipt is always printed on white paper, whatever theme the website is using. */
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:#eef1ef; color:#12201a; font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:14px; line-height:1.5; }
+  .toolbar{ max-width:760px; margin:0 auto; padding:14px 16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .toolbar a, .toolbar button{ font:inherit; font-weight:700; padding:10px 16px; border-radius:10px; border:1px solid #12201a22; background:#fff; color:#12201a; cursor:pointer; text-decoration:none; }
+  .toolbar .primary{ background:#0c8f5c; color:#fff; border-color:#0c8f5c; }
+  .toolbar .hint{ font-size:12.5px; color:#51615a; flex-basis:100%; }
+  .paper{ max-width:760px; margin:0 auto 40px; background:#fff; padding:36px 40px; border:1px solid #d9dfdb; border-radius:6px; }
+  .top{ display:flex; justify-content:space-between; gap:20px; border-bottom:2px solid #12201a; padding-bottom:16px; }
+  .brand{ font-size:24px; font-weight:800; letter-spacing:-.01em; }
+  .brand small{ display:block; font-size:12px; font-weight:500; color:#51615a; letter-spacing:0; }
+  .title{ text-align:right; }
+  .title h1{ margin:0; font-size:22px; letter-spacing:.14em; }
+  .ref{ font-family:ui-monospace,Consolas,monospace; font-size:15px; font-weight:700; }
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:20px 0; }
+  .grid h3{ margin:0 0 6px; font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:#51615a; }
+  .grid p{ margin:2px 0; }
+  table{ width:100%; border-collapse:collapse; margin-top:6px; }
+  th{ text-align:left; font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:#51615a; border-bottom:1px solid #12201a; padding:8px 6px; }
+  td{ padding:9px 6px; border-bottom:1px solid #e3e8e5; vertical-align:top; }
+  .num{ text-align:right; white-space:nowrap; }
+  .totals{ margin:14px 0 0 auto; width:300px; }
+  .totals div{ display:flex; justify-content:space-between; padding:3px 0; }
+  .totals .grand{ border-top:2px solid #12201a; margin-top:6px; padding-top:8px; font-size:18px; font-weight:800; }
+  .pay{ margin:18px 0; padding:12px 14px; border:1px solid #12201a; border-radius:6px; display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+  .pay b{ letter-spacing:.06em; }
+  .track{ display:flex; gap:18px; align-items:center; border:1px dashed #51615a; border-radius:8px; padding:14px; margin-top:18px; }
+  .track .qr{ width:116px; height:116px; flex:none; }
+  .track .qr svg{ width:100%; height:100%; display:block; }
+  .track h3{ margin:0 0 4px; font-size:15px; }
+  .track p{ margin:2px 0; font-size:13px; }
+  .url{ font-family:ui-monospace,Consolas,monospace; font-size:12px; word-break:break-all; }
+  .foot{ margin-top:22px; padding-top:14px; border-top:1px solid #d9dfdb; font-size:12.5px; color:#51615a; }
+  .msg{ max-width:760px; margin:40px auto; padding:0 16px; text-align:center; }
+  @media(max-width:620px){ .paper{ padding:22px 16px; } .grid{ grid-template-columns:1fr; } .top{ flex-direction:column; } .title{ text-align:left; } .totals{ width:100%; } }
+  @page{ size:A4; margin:14mm; }
+  @media print{
+    body{ background:#fff; }
+    .toolbar{ display:none !important; }
+    .paper{ border:0; border-radius:0; margin:0; padding:0; max-width:none; }
+    tr, .track, .pay{ page-break-inside:avoid; }
+    *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+<link rel="icon" href="images/bouesti-logo.jpg" type="image/jpeg">
+</head>
+<body>
+<div class="toolbar">
+  <button type="button" class="primary" id="printBtn">🖨 Print receipt</button>
+  <a href="index.html" id="backLink">← Back to shop</a>
+  <a href="track.html" id="trackLink">📍 Track this order</a>
+  <div class="hint">To keep a copy on your phone or computer, press Print and choose "Save as PDF".</div>
+</div>
+<div id="out"><p class="msg">Loading your receipt…</p></div>
+
+<script src="qrcode.js"></script>
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var ref = params.get('ref') || '';
+
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+  function money(n) { return '₦' + Math.round(Number(n) || 0).toLocaleString('en-NG'); }
+  function when(iso, withTime) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '—';
+    return d.toLocaleString('en-NG', withTime === false
+      ? { dateStyle: 'medium', timeZone: 'Africa/Lagos' }
+      : { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' });
+  }
+  function storage(key) { try { return localStorage.getItem(key) || ''; } catch (e) { return ''; } }
+
+  // Logged-in shopper, or staff coming from the admin dashboard.
+  function tokens() {
+    var list = [storage('bm_token'), storage('bm_admin_token')];
+    try { list.push(sessionStorage.getItem('bm_admin_token_session') || ''); } catch (e) {}
+    return list.filter(Boolean);
+  }
+
+  function fromServer() {
+    var list = tokens();
+    function attempt(i) {
+      if (i >= list.length) return Promise.resolve(null);
+      return fetch('/api/orders/' + encodeURIComponent(ref) + '/receipt', { headers: { Authorization: 'Bearer ' + list[i] } })
+        .then(function (res) { return res.ok ? res.json() : attempt(i + 1); })
+        .catch(function () { return null; });
+    }
+    return attempt(0);
+  }
+
+  function fromBrowser() {
+    try {
+      var all = JSON.parse(storage('bm_receipts') || '{}');
+      return all[ref] ? { order: all[ref], shop: null } : null;
+    } catch (e) { return null; }
+  }
+
+  function payBlock(o) {
+    var status = o.paymentStatus === 'paid'
+      ? ['PAID', 'Thank you — payment received.']
+      : (/delivery/i.test(o.payMethod || '')
+          ? ['PAY ON DELIVERY', 'Amount to pay when your goods arrive: ' + money(o.total)]
+          : ['PAYMENT PENDING', 'Your payment has not been confirmed yet.']);
+    return '<div class="pay"><div><b>' + status[0] + '</b><br>' + esc(status[1]) + '</div>' +
+           '<div>Method: <b>' + esc(o.payMethod || '—') + '</b></div></div>';
+  }
+
+  function render(data) {
+    var o = data.order;
+    o.state = o.state || 'Ekiti';
+    var shop = data.shop || { name: 'Bouesti Marketplace', phone: '07086087995', email: 'successjomiloju@gmail.com', address: 'Ekiti State, Nigeria' };
+    var trackUrl = new URL('track.html?ref=' + encodeURIComponent(o.ref), location.href).href;
+
+    var rows = (o.items || []).map(function (i) {
+      var label = esc(i.name) + (i.mode ? ' — ' + (i.mode === 'live' ? 'Live' : 'Processed') : '') + (i.measure ? ' · ' + esc(i.measure) : (i.weightKg ? ' · ' + i.weightKg + ' kg' : ''));
+      var unit = money(i.unitPrice) + ((i.measure || !i.weightKg) ? '' : ' / kg');
+      return '<tr><td>' + label + '</td><td class="num">' + i.qty + '</td><td class="num">' + unit + '</td><td class="num">' + money(i.lineTotal) + '</td></tr>';
+    }).join('');
+
+    document.title = 'Receipt ' + o.ref + ' — Bouesti Marketplace';
+    document.getElementById('trackLink').href = 'track.html?ref=' + encodeURIComponent(o.ref);
+
+    document.getElementById('out').innerHTML =
+      '<div class="paper">' +
+        '<div class="top">' +
+          '<div class="brand">' + esc(shop.name) + '<small>Fresh produce &amp; livestock · Ekiti and neighbouring states</small></div>' +
+          '<div class="title"><h1>RECEIPT</h1><div class="ref">' + esc(o.ref) + '</div><div>' + when(o.createdAt) + '</div></div>' +
+        '</div>' +
+        '<div class="grid">' +
+          '<div><h3>Billed to</h3><p><b>' + esc(o.customerName) + '</b></p><p>' + esc(o.customerPhone || '') + '</p><p>' + esc(o.customerEmail || '') + '</p></div>' +
+          '<div><h3>Deliver to</h3><p>' + esc(o.address) + '</p><p>' + esc(o.lga) + (o.state && o.state !== 'Ekiti' ? ', ' + esc(o.state) : '') + (o.state === 'Ekiti' ? ', Ekiti State' : ' State') + '</p>' +
+            '<p>Delivery date: <b>' + (o.deliveryDate ? when(o.deliveryDate, false) : '—') + '</b></p></div>' +
+        '</div>' +
+        '<table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead><tbody>' +
+          (rows || '<tr><td colspan="4">No item details were saved for this order.</td></tr>') + '</tbody></table>' +
+        '<div class="totals">' +
+          '<div><span>Subtotal</span><span>' + money(o.subtotal) + '</span></div>' +
+          '<div><span>Service fee (5%)</span><span>' + money(o.serviceFee) + '</span></div>' +
+          '<div><span>Delivery to ' + esc(o.state || 'Ekiti') + '</span><span>' + money(o.deliveryFee) + '</span></div>' +
+          '<div class="grand"><span>Total</span><span>' + money(o.total) + '</span></div>' +
+        '</div>' +
+        payBlock(o) +
+        '<div class="track">' +
+          '<div class="qr" id="qr"></div>' +
+          '<div><h3>Track your goods</h3>' +
+            '<p>Scan the code, or open the link below and log in, to follow your order on the map.</p>' +
+            '<p>Order reference: <b class="ref">' + esc(o.ref) + '</b></p>' +
+            '<p class="url">' + esc(trackUrl) + '</p></div>' +
+        '</div>' +
+        '<div class="foot">' +
+          '<p><b>Buyer protection:</b> check your goods on arrival. If something is wrong, contact us within 24 hours of delivery with this order reference and a photo.</p>' +
+          '<p>' + esc(shop.name) + (shop.phone ? ' · WhatsApp / phone ' + esc(shop.phone) : '') + (shop.email ? ' · ' + esc(shop.email) : '') + '</p>' +
+          '<p>Keep this receipt for your records. Thank you for buying from ' + esc(shop.name) + '.</p>' +
+        '</div>' +
+      '</div>';
+
+    // QR code that opens the tracking page (needs qrcode.js; the link above still works without it).
+    try {
+      var qr = qrcode(0, 'M');
+      qr.addData(trackUrl);
+      qr.make();
+      document.getElementById('qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    } catch (e) { document.getElementById('qr').style.display = 'none'; }
+
+    if (params.get('print') === '1') setTimeout(function () { window.print(); }, 500);
+  }
+
+  document.getElementById('printBtn').addEventListener('click', function () { window.print(); });
+
+  if (!ref) {
+    document.getElementById('out').innerHTML = '<p class="msg">No order reference given. Open a receipt from <b>My Orders</b>.</p>';
+    return;
+  }
+  fromServer().then(function (data) {
+    data = data || fromBrowser();
+    if (!data) {
+      document.getElementById('out').innerHTML = '<p class="msg">We could not find the receipt for <b>' + esc(ref) + '</b> on this device.<br>Please log in with the account that placed the order, then open My Orders.</p>';
+      return;
+    }
+    render(data);
+  });
+})();
+</script>
+</body>
+</html>
